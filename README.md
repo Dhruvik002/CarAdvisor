@@ -44,8 +44,7 @@ including budget, seats, fuel type, and brand.
 
 - **Source :** Cars Datasets 2025
 - **Total Records :** 1218 cars
-- **Features :** Company, Car Name, Engine, CC/Battery Capacity, HorsePower,
-  Top Speed, Performance, Price, Fuel Type, Seats, Torque
+- **Features :** Company, Car Name, Engine, CC/Battery Capacity, HorsePower, Top Speed, Performance, Price, Fuel Type, Seats, Torque
 
 ---
 
@@ -63,6 +62,7 @@ including budget, seats, fuel type, and brand.
 ## Recommendation System
 
 Content-based filtering approach:
+
 - Filters cars by **budget**, **seat count**, **fuel type**, and **brand**
 - Ranks results by **Value Score** (HorsePower per dollar) — best value first
 
@@ -81,7 +81,9 @@ streamlit run app.py
 ```
 
 **Step 3 — Open in browser**
+
 http://localhost:8501
+
 ---
 
 ## How to Run the Notebook
@@ -95,12 +97,14 @@ http://localhost:8501
 ## Requirements
 
 Create a file named `requirements.txt` with the following:
+
 pandas
 numpy
 scikit-learn
 matplotlib
 seaborn
 streamlit
+
 ---
 
 ## Project Summary
