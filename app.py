@@ -3,24 +3,17 @@ import pandas as pd
 import numpy as np
 import re
 import os
-import joblib
 from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestRegressor
 from sklearn.svm import SVR
 from sklearn.metrics import r2_score
 from sklearn.preprocessing import StandardScaler
-from sklearn.pipeline import Pipeline
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-# ──────────────────────────────────────────────────────────────
-# PAGE CONFIG
-# ──────────────────────────────────────────────────────────────
+# Page Config
 st.set_page_config(page_title="CarAdvisor AI", layout="wide")
 
-# ──────────────────────────────────────────────────────────────
-# STYLE
-# ──────────────────────────────────────────────────────────────
+# Style
 st.markdown("""
 <style>
 body { background-color: #0f172a; }
@@ -46,9 +39,7 @@ body { background-color: #0f172a; }
 </style>
 """, unsafe_allow_html=True)
 
-# ──────────────────────────────────────────────────────────────
-# HERO
-# ──────────────────────────────────────────────────────────────
+# Hero
 st.markdown("""
 <div class="hero">
     <h1>🚗 CarAdvisor AI</h1>
@@ -57,26 +48,17 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
-# ──────────────────────────────────────────────────────────────
-# HELPER: clean numeric strings (shared with notebook logic)
-# ──────────────────────────────────────────────────────────────
+# Helper: clean numeric strings
 def clean_data(value):
-    """
-    Cleans numeric strings:
-    - Removes commas and $ signs
-    - Averages range values (e.g. '200-300' → 250.0)
-    - Returns NaN if no number found
-    """
-    value = str(value).replace(',', '').replace('$', '')
+    """Strips $ and commas, averages ranges like '200-300', returns np.nan if no number found."""
+    value   = str(value).replace(',', '').replace('$', '')
     numbers = re.findall(r'\d+\.?\d*', value)
     if len(numbers) == 2:
         return (float(numbers[0]) + float(numbers[1])) / 2
     return float(numbers[0]) if numbers else np.nan
 
 
-# ──────────────────────────────────────────────────────────────
-# HELPER: brand image lookup
-# ──────────────────────────────────────────────────────────────
+# Helper: brand image lookup
 def get_image(name):
     name = name.lower().replace(' ', '')
     mapping = {
@@ -86,8 +68,7 @@ def get_image(name):
         'suzuki'         : 'marutisuzuki',
         'maruti'         : 'marutisuzuki',
     }
-    name = mapping.get(name, name)
-    # Resolve path relative to this script, not the working directory
+    name     = mapping.get(name, name)
     base_dir = os.path.dirname(os.path.abspath(__file__))
     for ext in ['png', 'jpg', 'jpeg']:
         path = os.path.join(base_dir, 'carimage', f'{name}.{ext}')
@@ -96,16 +77,9 @@ def get_image(name):
     return None
 
 
-# ──────────────────────────────────────────────────────────────
-# LOAD & CACHE DATA + MODEL
-# Uses @st.cache_resource so training happens only ONCE per
-# server session. Also tries to load a pre-saved model from
-# best_model.pkl (produced by the notebook) to avoid retraining
-# entirely on every deploy.
-# ──────────────────────────────────────────────────────────────
-@st.cache_resource(show_spinner='Loading data and training model…')
+# Load data and train model — cached so it runs only once per session
+@st.cache_resource(show_spinner='Loading data and training model...')
 def load_and_train():
-    # ── Portable CSV path ────────────────────────────────────────────────
     base_dir     = os.path.dirname(os.path.abspath(__file__))
     dataset_path = os.path.join(base_dir, 'Cars Datasets 2025.csv')
 
@@ -120,50 +94,36 @@ def load_and_train():
         'TATA MOTORS'      : 'TATA',
     })
 
-    # Clean all numeric columns
+    # Clean numeric columns
     for col in ['Cars Prices', 'Seats', 'HorsePower', 'Total Speed', 'CC/Battery Capacity']:
         df[col] = df[col].apply(clean_data)
 
     df.dropna(inplace=True)
 
-    # Remove extreme price outliers (1st–99th percentile)
+    # Remove extreme price outliers (1st-99th percentile)
     Q1 = df['Cars Prices'].quantile(0.01)
     Q3 = df['Cars Prices'].quantile(0.99)
     df = df[(df['Cars Prices'] >= Q1) & (df['Cars Prices'] <= Q3)].copy()
 
-    # Log-transform price (same as notebook — reduces skew, improves model)
+    # Log-transform price to reduce skew
     df['Log Price'] = np.log1p(df['Cars Prices'])
 
-    # Encode company as integer category code for the model
+    # Encode company as integer for model input
     df['Company Encoded'] = df['Company Names'].astype('category').cat.codes
 
     feature_cols = ['Seats', 'HorsePower', 'Total Speed', 'CC/Battery Capacity', 'Company Encoded']
     X = df[feature_cols]
-    y = df['Log Price']          # predict log price, exponentiate at display time
+    y = df['Log Price']
 
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=42
-    )
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-    scaler = StandardScaler()
+    scaler         = StandardScaler()
     X_train_scaled = scaler.fit_transform(X_train)
     X_test_scaled  = scaler.transform(X_test)
 
-    # ── Try to load pre-saved model from notebook ────────────────────────
-    model_path = os.path.join(base_dir, 'best_model.pkl')
-    if os.path.exists(model_path):
-        try:
-            model = joblib.load(model_path)
-            # The saved model was trained on one-hot features; retrain here
-            # with the simpler encoded features used by the app
-            model.fit(X_train_scaled, y_train)
-        except Exception:
-            model = SVR(kernel='rbf', C=10, gamma='scale')
-            model.fit(X_train_scaled, y_train)
-    else:
-        # SVM is the best-performing model (matches notebook conclusion)
-        model = SVR(kernel='rbf', C=10, gamma='scale')
-        model.fit(X_train_scaled, y_train)
+    # SVM is the best-performing model (matches notebook conclusion)
+    model = SVR(kernel='rbf', C=10, gamma='scale')
+    model.fit(X_train_scaled, y_train)
 
     r2_global = r2_score(y_test, model.predict(X_test_scaled))
 
@@ -173,9 +133,7 @@ def load_and_train():
 df, scaler, model, r2_global = load_and_train()
 
 
-# ──────────────────────────────────────────────────────────────
-# SIDEBAR INPUTS
-# ──────────────────────────────────────────────────────────────
+# Sidebar Inputs
 st.sidebar.header('🔧 Car Preferences')
 
 seats  = st.sidebar.selectbox('Seats', [2, 4, 5, 7])
@@ -185,9 +143,7 @@ engine = st.sidebar.slider('Engine CC / Battery kWh', 800, 8000, 2000)
 brand  = st.sidebar.selectbox('Brand', sorted(df['Company Names'].unique()))
 
 
-# ──────────────────────────────────────────────────────────────
-# INPUT VALIDATION — guard against missing brand data
-# ──────────────────────────────────────────────────────────────
+# Input Validation
 brand_df = df[df['Company Names'] == brand].copy()
 
 if brand_df.empty:
@@ -195,41 +151,32 @@ if brand_df.empty:
     st.stop()
 
 
-# ──────────────────────────────────────────────────────────────
-# PREDICTION
-# Predict in log-price space, then exponentiate back to USD
-# ──────────────────────────────────────────────────────────────
+# Prediction — predict in log-price space, convert back to USD
 brand_code = brand_df['Company Encoded'].iloc[0]
 input_data = np.array([[seats, hp, speed, engine, brand_code]])
 log_pred   = model.predict(scaler.transform(input_data))[0]
-pred_price = np.expm1(log_pred)          # inverse of log1p
+pred_price = np.expm1(log_pred)
 
 st.subheader('💰 Predicted Price')
 st.success(f'${int(pred_price):,}')
 
 
-# ──────────────────────────────────────────────────────────────
-# SIMILAR CARS — closest to predicted price within selected brand
-# ──────────────────────────────────────────────────────────────
+# Similar Cars — closest to predicted price within selected brand
 brand_df['diff'] = abs(brand_df['Cars Prices'] - pred_price)
 top3 = brand_df.sort_values('diff').head(3)
 
-# Confidence: how close the nearest cars are to the predicted price
 avg_diff   = top3['diff'].mean()
 confidence = max(0.0, 100 - (avg_diff / pred_price) * 100) if pred_price > 0 else 0.0
 
 
-# ──────────────────────────────────────────────────────────────
-# TOP RECOMMENDED CARDS
-# ──────────────────────────────────────────────────────────────
+# Top Recommended Cards
 st.markdown('<h3 style="text-align:center;color:gold;">🏆 Top Recommended Cars</h3>',
             unsafe_allow_html=True)
 
 if top3.empty:
     st.warning(f'No cars found for brand: {brand}. Try a different brand.')
 else:
-    num_cards = len(top3)
-    cols = st.columns(num_cards)
+    cols = st.columns(len(top3))
 
     for i, (_, row) in enumerate(top3.iterrows()):
         with cols[i]:
@@ -247,9 +194,7 @@ else:
             """, unsafe_allow_html=True)
 
 
-# ──────────────────────────────────────────────────────────────
-# PRICE COMPARISON BAR CHART
-# ──────────────────────────────────────────────────────────────
+# Price Comparison Chart
 if not top3.empty:
     st.subheader('📊 Price Comparison')
     fig, ax = plt.subplots(figsize=(7, 3))
@@ -260,36 +205,31 @@ if not top3.empty:
     plt.xticks(rotation=20)
     plt.tight_layout()
     st.pyplot(fig)
-    plt.close(fig)      # prevent matplotlib figure memory leak
+    plt.close(fig)
 
 
-# ──────────────────────────────────────────────────────────────
-# FEATURE CORRELATION HEATMAP
-# ──────────────────────────────────────────────────────────────
+# Feature Correlation Heatmap
 st.subheader('🔥 Feature Correlation')
 numeric_df = df.select_dtypes(include=np.number)
 fig2, ax2  = plt.subplots(figsize=(8, 5))
-sns.heatmap(numeric_df.corr(), annot=True, fmt='.2f', cmap='coolwarm', ax=ax2)
+sns.heatmap(numeric_df.corr(numeric_only=True), annot=True, fmt='.2f', cmap='coolwarm', ax=ax2)
 plt.tight_layout()
 st.pyplot(fig2)
-plt.close(fig2)         # prevent matplotlib figure memory leak
+plt.close(fig2)
 
 
-# ──────────────────────────────────────────────────────────────
-# MODEL PERFORMANCE
-# ──────────────────────────────────────────────────────────────
+# Model Performance
 st.subheader('📈 Model Performance')
 st.info(f'Overall Model R² Score: **{r2_global:.3f}**')
 
-MIN_SAMPLES_FOR_R2 = 5      # R² is unreliable with very small samples
+MIN_SAMPLES_FOR_R2 = 5
 
 if len(brand_df) >= MIN_SAMPLES_FOR_R2:
     X_brand        = brand_df[['Seats', 'HorsePower', 'Total Speed',
                                 'CC/Battery Capacity', 'Company Encoded']]
     y_brand        = brand_df['Log Price']
     X_brand_scaled = scaler.transform(X_brand)
-    y_brand_pred   = model.predict(X_brand_scaled)
-    brand_r2       = r2_score(y_brand, y_brand_pred)
+    brand_r2       = r2_score(y_brand, model.predict(X_brand_scaled))
     st.info(f'{brand} Brand R² Score: **{brand_r2:.3f}**')
 else:
     st.warning(
@@ -300,9 +240,7 @@ else:
 st.success(f'Prediction Confidence: **{confidence:.1f}%**')
 
 
-# ──────────────────────────────────────────────────────────────
-# FOOTER
-# ──────────────────────────────────────────────────────────────
+# Footer
 st.markdown(
     "<hr><p style='text-align:center;color:gray;'>Made by Dhruvik Parmar</p>",
     unsafe_allow_html=True
