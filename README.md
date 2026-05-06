@@ -82,7 +82,9 @@ streamlit run app.py
 
 **Step 3 — Open in browser**
 
+```
 http://localhost:8501
+```
 
 ---
 
@@ -98,12 +100,14 @@ http://localhost:8501
 
 Create a file named `requirements.txt` with the following:
 
+```
 pandas
 numpy
 scikit-learn
 matplotlib
 seaborn
 streamlit
+```
 
 ---
 
