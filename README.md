@@ -81,3 +81,32 @@ streamlit run app.py
 ```
 
 **Step 3 — Open in browser**
+http://localhost:8501
+---
+
+## How to Run the Notebook
+
+1. Open `carproject_final.ipynb` in Jupyter Notebook or JupyterLab
+2. Make sure `Cars Datasets 2025.csv` is in the same folder
+3. Run all cells from top to bottom
+
+---
+
+## Requirements
+
+Create a file named `requirements.txt` with the following:
+pandas
+numpy
+scikit-learn
+matplotlib
+seaborn
+streamlit
+---
+
+## Project Summary
+
+CarAdvisor successfully demonstrates an end-to-end machine learning pipeline — from raw data cleaning and exploratory data analysis to model training, evaluation, and a fully functional web-based recommendation system. The project contributes to improved customer experiences, increased confidence, and reduced decision-making bias when purchasing a car.
+
+---
+
+*Made by Dhruvik Parmar*
